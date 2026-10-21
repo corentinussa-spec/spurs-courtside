@@ -70,20 +70,44 @@ def parse_date(s):
     return datetime.datetime.fromisoformat(s)
 
 # ---------------------------------------------------------------- calendrier
+CUP_ROUND = (("championship", "Finale"), ("final", "Finale"), ("semifinal", "Demi-finale"), ("semi-final", "Demi-finale"),
+             ("quarterfinal", "Quart de finale"), ("quarter-final", "Quart de finale"), ("group", "Phase de groupes"))
+
+def cup_info(ev, comp):
+    """Repère un match de NBA Cup d'après les notes ESPN. Renvoie (est_cup, libellé, est_finale)."""
+    texts = [n.get("headline", "") for n in comp.get("notes", []) + ev.get("notes", [])]
+    texts += [(comp.get("type") or {}).get("text", ""), (ev.get("seasonType") or {}).get("name", "") if isinstance(ev.get("seasonType"), dict) else ""]
+    blob = " ".join(t for t in texts if t).lower()
+    if not any(k in blob for k in ("nba cup", "emirates", "in-season tournament", "cup ")):
+        return False, "", False
+    label = next((fr for en, fr in CUP_ROUND if en in blob), "")
+    return True, label, label == "Finale"
+
 def schedule(team):
     out = {}
-    for st in (2, 3):     # saison régulière (+ phase finale si elle existe)
-        j = get(f"{SITE}/teams/{espn(team)}/schedule?season={SEASON}&seasontype={st}")
+    # 2 = saison régulière (phase de groupes, quarts et demies de la Cup comprises), 3 = phase finale,
+    # 5 et 6 = catégories où ESPN range parfois le play-in et la finale de la NBA Cup ; sans type = calendrier complet
+    for st in ("2", "3", "5", "6", ""):
+        q = f"&seasontype={st}" if st else ""
+        j = get(f"{SITE}/teams/{espn(team)}/schedule?season={SEASON}{q}")
         for ev in (j or {}).get("events", []):
             comp = (ev.get("competitions") or [{}])[0]
             cs = comp.get("competitors", [])
             me = next((c for c in cs if us(c.get("team", {}).get("abbreviation")) == team), None)
             op = next((c for c in cs if c is not me), None)
             if not me or not op: continue
+            stype = st or str(((ev.get("seasonType") or {}).get("type") if isinstance(ev.get("seasonType"), dict) else "") or "")
+            if stype == "1": continue          # matchs de présaison
             start = parse_date(ev["date"])
             done = comp.get("status", ev.get("status", {})).get("type", {}).get("completed", False)
+            cup, label, cup_final = cup_info(ev, comp)
+            if st == "" and not cup and ev["id"] not in out: continue   # calendrier complet : on n'y prend que les matchs de Cup manquants
+            prev = out.get(ev["id"], {})
             out[ev["id"]] = {"espnId": ev["id"], "start": iso(start), "opp": us(op["team"]["abbreviation"]),
-                             "home": me.get("homeAway") == "home", "final": bool(done), "playoffs": st == 3}
+                             "home": me.get("homeAway") == "home", "final": bool(done),
+                             "playoffs": prev.get("playoffs", False) or stype == "3",
+                             "cup": prev.get("cup", False) or cup, "cupRound": label or prev.get("cupRound", ""),
+                             "cupFinal": prev.get("cupFinal", False) or cup_final}
     return out
 
 # ---------------------------------------------------------------- feuilles de match
@@ -442,6 +466,8 @@ def main():
         g = {"id": gid, "espnId": ev["espnId"], "start": ev["start"], "opp": ev["opp"], "oppName": NAMES.get(ev["opp"], ev["opp"]),
              "home": ev["home"], "status": "scheduled"}
         if ev["playoffs"]: g["playoffs"] = True
+        if ev.get("cup"): g["cup"] = True; g["cupRound"] = ev.get("cupRound", "")
+        if ev.get("cupFinal"): g["cupFinal"] = True
         if ev["final"]:
             b = box(ev["espnId"])
             if b and "SAS" in b["teams"]:
@@ -457,7 +483,7 @@ def main():
                           "periods": [{"q": str(i + 1), "SAS": (me["periods"] + [0] * n)[i], "OPP": (op["periods"] + [0] * n)[i]} for i in range(n)],
                           "teamStats": {"SAS": team_totals(me), "OPP": team_totals(op)},
                           "box": {"SAS": box_rows(me), "OPP": box_rows(op)}, "records": recs, "recordsV": 2})
-                if not ev["playoffs"]: sas_boxes.append(b); sas_gids.append(gid)
+                if not ev["playoffs"] and not ev.get("cupFinal"): sas_boxes.append(b); sas_gids.append(gid)   # la finale de la Cup ne compte pas dans la saison
             elif gid in old_games:
                 g = old_games[gid]
         games.append(g)
@@ -476,7 +502,7 @@ def main():
         else:
             sc = schedule(t); bx = []
             for ev in sc.values():
-                if ev["final"] and not ev["playoffs"]:
+                if ev["final"] and not ev["playoffs"] and not ev.get("cupFinal"):
                     b = box(ev["espnId"])
                     if b and t in b["teams"]: bx.append(b)
         s, pl = season_stats(t, bx)

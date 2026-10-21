@@ -193,6 +193,8 @@ tr.cut td{border-bottom:2px dashed var(--silver)}
 .ktag{padding:3px 8px;border-radius:999px;font:600 11px var(--data);text-transform:uppercase;letter-spacing:.04em;background:color-mix(in srgb,var(--teal) 14%,transparent);color:var(--teal)}
 .ktag.blessure{background:color-mix(in srgb,var(--orange) 16%,transparent);color:var(--orange)}
 .ktag.conference{background:color-mix(in srgb,var(--pink) 14%,transparent);color:var(--pink)}
+.cupb{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:color-mix(in srgb,var(--orange) 18%,transparent);color:var(--orange);font:600 10px var(--data);letter-spacing:.06em;text-transform:uppercase;vertical-align:2px}
+.hero .cupb{background:var(--h-pink-bg);color:var(--h-pink-tx)}
 .empty{padding:16px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:var(--r)}
 .foot{font-size:12px;color:var(--muted);text-align:center}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
@@ -266,11 +268,13 @@ function record(abbr){
 }
 
 /* ---------- views ---------- */
+const cupBadge=g=>g.cup?`<span class="cupb">NBA Cup${g.cupRound?" · "+esc(g.cupRound):""}</span>`:"";
+
 function vMatchs(){
   const ng=nextGame(); let h="";
   if(ng){const d=new Date(ng.start);const ms=d-Date.now();const hh=Math.floor(ms/3600e3),dd=Math.floor(hh/24);
     const cd=ms<=0?"En cours":dd>0?`Dans ${dd} j ${hh%24} h`:`Dans ${hh} h ${Math.floor(ms/60e3)%60} min`;
-    h+=`<button class="hero" data-g="${ng.id}"><span class="band" aria-hidden="true"><i></i><i></i><i></i></span><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="label">Prochain match · ${ng.home?"à domicile":"à l'extérieur"}</span><span class="count">${cd}</span></div>
+    h+=`<button class="hero" data-g="${ng.id}"><span class="band" aria-hidden="true"><i></i><i></i><i></i></span><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="label">Prochain match · ${ng.home?"à domicile":"à l'extérieur"}${cupBadge(ng)}</span><span class="count">${cd}</span></div>
     <div class="matchup"><div class="tm"><span class="ab">SAS</span><span class="nm">Spurs</span><span class="ul" style="background:var(--h-teal)"></span></div><span class="vs">${ng.home?"VS":"@"}</span><div class="tm r"><span class="ab">${esc(ng.opp)}</span><span class="nm">${esc(name(ng.opp))}</span><span class="ul" style="background:var(--h-orange)"></span></div></div>
     <div class="clocks"><div class="clock us"><div class="label">Heure US (ET)</div><div class="t">${tET(d)}</div><div class="d">${dUS(d)} · ${tCT(d)} à San Antonio</div></div>
     <div class="clock fr"><div class="label">Heure France</div><div class="t">${tFR(d)}</div><div class="d">${dFR(d)}</div></div></div></button>`;}
@@ -286,7 +290,7 @@ function vMatchs(){
     if(isFinal(g)){chip=locked(g)?`<span class="chip hide">Résultat masqué</span>`:`<span class="chip ${res(g)==="V"?"w":"l"}">${res(g)} ${g.score.SAS}-${g.score.OPP}</span>`}
     else chip=g===nextGame()?`<span class="chip next">Prochain</span>`:`<span class="chip">${tFR(d)} FR</span>`;
     out.push(`<button class="row" data-g="${g.id}"><div class="dt"><b>${fmt(d,"Europe/Paris",{day:"2-digit"})}</b><span>${fmt(d,"Europe/Paris",{weekday:"short"})}</span></div>
-    <div class="op"><div class="n">${g.home?"vs":"@"} ${esc(name(g.opp))}</div><div class="s">US : ${dUS(d)}, ${tET(d)} ET</div></div>${chip}</button>`)});
+    <div class="op"><div class="n">${g.home?"vs":"@"} ${esc(name(g.opp))}${cupBadge(g)}</div><div class="s">US : ${dUS(d)}, ${tET(d)} ET</div></div>${chip}</button>`)});
   out[out.length-1]=out[out.length-1].replace('class="row','class="row last');
   return h+`<div class="list">${out.join("")}</div>`;
 }
@@ -350,7 +354,7 @@ function openGame(id,quiet){
   const g=S.games.find(x=>x.id===id); if(!g) return; S.open=id; S.openP=null; S.openApp=false;
   const d=new Date(g.start); const o=g.opp; const lock=locked(g); const anyL=anyLock();
   const sas=record("SAS"), op=record(o); const hh=h2h(o);
-  let h=`<div class="bar-top"><div class="in"><button class="btn ghost" id="close" aria-label="Fermer">← Retour</button><span class="label">${g.home?"Domicile":"Extérieur"} · ${esc(name(o))}</span></div></div><div class="wrap">`;
+  let h=`<div class="bar-top"><div class="in"><button class="btn ghost" id="close" aria-label="Fermer">← Retour</button><span class="label">${g.home?"Domicile":"Extérieur"} · ${esc(name(o))}${cupBadge(g)}</span></div></div><div class="wrap">`;
   h+=`<div class="matchup"><div class="tm"><span class="ab" style="font-family:var(--display);font-weight:800;font-size:40px">SAS</span><span class="nm muted">Spurs</span></div><span class="vs muted">${g.home?"vs":"@"}</span><div class="tm r"><span class="ab" style="font-family:var(--display);font-weight:800;font-size:40px">${esc(o)}</span><span class="nm muted">${esc(name(o))}</span></div></div>`;
   h+=`<div class="clocks"><div class="clock card"><div class="label">Heure US (ET)</div><div class="t">${tET(d)}</div><div class="d">${dUS(d)} · ${tCT(d)} CT</div></div><div class="clock card"><div class="label">Heure France</div><div class="t">${tFR(d)}</div><div class="d">${dFR(d)}</div></div></div>`;
   if(isFinal(g)){
