@@ -29,10 +29,21 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .wrap{max-width:720px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 40px;display:grid;gap:14px}
 header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
 header.top .in{max-width:720px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px 0}
-.brand{display:flex;align-items:center;gap:12px}
-.brand svg{width:44px;height:48px;flex:none}
-.brand h1{font-family:var(--display);font-weight:800;font-size:28px;letter-spacing:.02em;line-height:1;margin:0;text-transform:uppercase}
-.brand .sub{font-size:12px;color:var(--muted);margin-top:3px}
+.brand{position:relative;display:flex;align-items:center;gap:14px;overflow:hidden;margin:-10px calc(-1 * max(16px,env(safe-area-inset-right,0px))) 0 calc(-1 * max(16px,env(safe-area-inset-left,0px)));padding:12px max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px))}
+.brand .court{position:absolute;right:-70px;top:-58px;width:180px;height:180px;fill:none;stroke:var(--surface2);stroke-width:3;pointer-events:none}
+.brand .ttl{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.brand h1{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:.03em;line-height:.95;margin:0;text-transform:uppercase}
+.brand h1 span{color:var(--teal)}
+.brand .sub{display:flex;align-items:center;gap:6px;font:500 12px var(--data);color:var(--muted)}
+.brand .dot{width:7px;height:7px;border-radius:50%;background:var(--win);flex:none}
+.logo-btn{position:relative;flex:none;width:60px;height:66px;padding:0;border:0;background:none;cursor:pointer;border-radius:8px}
+.logo-btn svg{width:100%;height:100%;display:block}
+.pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.pick button{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--fg);font:inherit;text-align:left;cursor:pointer}
+.pick button[aria-pressed="true"]{border-color:var(--teal);box-shadow:0 0 0 2px var(--teal) inset}
+.pick svg{width:44px;height:48px;flex:none}
+.pick b{display:block;font-size:14px;line-height:1.2}
+.pick small{color:var(--muted);font-size:12px}
 .fiesta{height:3px;background:linear-gradient(90deg,var(--teal) 0 33%,var(--pink) 33% 66%,var(--orange) 66%);margin-top:10px}
 nav.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
 nav.tabs button{flex:1 0 auto;font:600 13px var(--body);letter-spacing:.06em;text-transform:uppercase;background:none;border:0;color:var(--muted);padding:12px 10px;border-bottom:3px solid transparent;cursor:pointer}
@@ -183,13 +194,9 @@ tr.cut td{border-bottom:2px dashed var(--silver)}
 
 <header class="top"><div class="in">
   <div class="brand">
-    <svg viewBox="0 0 88 96" aria-label="Maillot numéro 5" role="img">
-      <path d="M31 4 L22 5 Q23 26 11 36 L11 92 L77 92 L77 36 Q65 26 66 5 L57 4 Q55 24 44 24 Q33 24 31 4 Z" fill="#141414" stroke="#9aa5a9" stroke-width="3"/>
-      <path d="M32 7 Q35 20 44 20 Q53 20 56 7" fill="none" stroke="#c9d1d4" stroke-width="2.5"/>
-      <path d="M24 8 Q24 28 14 37 M64 8 Q64 28 74 37" fill="none" stroke="#c9d1d4" stroke-width="2.5"/>
-      <text x="44" y="74" text-anchor="middle" font-family="Big Shoulders Display, Impact, sans-serif" font-weight="800" font-size="42" fill="#f2f4f5" stroke="#9aa5a9" stroke-width="1.5">5</text>
-    </svg>
-    <div><h1>Spurs Courtside</h1><div class="sub" id="upd">Chargement des données…</div></div>
+    <svg class="court" aria-hidden="true" viewBox="0 0 180 180"><circle cx="90" cy="90" r="80"/><circle cx="90" cy="90" r="30"/><line x1="0" y1="90" x2="180" y2="90"/></svg>
+    <button class="logo-btn" id="logoBtn" aria-label="Choisir le joueur du maillot"></button>
+    <div class="ttl"><h1>Spurs <span>Courtside</span></h1><div class="sub"><i class="dot"></i><span id="upd">Chargement des données…</span></div></div>
   </div>
   <div class="fiesta"></div>
   <nav class="tabs" role="tablist">
@@ -322,7 +329,7 @@ function render(){
   if(!S.games.length) return;
   const v={matchs:vMatchs,classement:vClassement,blessures:vBlessures,stats:vStats,effectif:vEffectif,actus:vActus}[S.tab]();
   $("#main").innerHTML=v+`<div class="foot">Rappel de match à 12h45 les jours de match. Données mises à jour deux fois par jour.</div>`;
-  if(S.meta?.updatedAt) $("#upd").textContent="Mis à jour "+fmt(new Date(S.meta.updatedAt),"Europe/Paris",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+  if(S.meta?.updatedAt) $("#upd").textContent="Données à jour · "+fmt(new Date(S.meta.updatedAt),"Europe/Paris",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
 }
 
 /* ---------- match sheet ---------- */
@@ -404,7 +411,7 @@ function vEffectif(){
   <div class="seg">${["pts","reb","ast"].map(k=>`<button aria-pressed="${S.psort===k}" data-ps="${k}">${{pts:"Pts",reb:"Reb",ast:"Pd"}[k]}</button>`).join("")}</div></div>`;
   if(!L.length) return h+`<div class="empty">L'effectif apparaîtra après la prochaine mise à jour des données.</div>`;
   const rows=L.map(r=>{const a=lock?null:seasonAvg(prows(r));return {r,a,v:a?a[S.psort]/a.gp:-1}});
-  rows.sort((x,y)=>lock?(parseInt(x.r.jersey)||99)-(parseInt(y.r.jersey)||99):(y.v-x.v)||x.r.name.localeCompare(y.r.name));
+  rows.sort((x,y)=>lock?((isNaN(parseInt(x.r.jersey))?99:parseInt(x.r.jersey))-(isNaN(parseInt(y.r.jersey))?99:parseInt(y.r.jersey))):(y.v-x.v)||x.r.name.localeCompare(y.r.name));
   h+=`<div><div class="phead"><span>N°</span><span>Joueur</span><span>Pts</span><span>Reb</span><span>Pd</span></div><div class="roster">`+
   rows.map(({r,a})=>{const f=k=>a?fr1(a[k]/a.gp):"–";
     return `<button class="prow" data-p="${esc(r.id)}"><span class="no">${esc(r.jersey||"–")}</span><span style="min-width:0"><span class="nm">${esc(r.name)}</span>${injChip(r.name)||`<span class="muted" style="font-size:12px">${esc(posFR(r.pos))}</span>`}</span>
@@ -489,6 +496,47 @@ function vActus(){
     <h4>${esc(n.title)}</h4>${n.text?`<p>${esc(n.text)}</p>`:""}${n.url?`<a href="${esc(n.url)}" target="_blank" rel="noopener">Lire sur ${esc(n.source||"le site")} (en anglais) →</a>`:""}</article>`}).join("")}</div>`;
 }
 
+
+/* ---------- maillot du logo ---------- */
+function lastName(n){const p=String(n||"").replace(/\s+(Jr\.?|Sr\.?|II|III|IV)$/i,"").trim().split(/\s+/);return (p.length>1?p.slice(1).join(" "):p[0]||"").toUpperCase()}
+function jerseySVG(num,nm){
+  const N=esc(String(num||"").slice(0,2)); const L=esc(String(nm||"").slice(0,14));
+  const fs=L?Math.min(11,62/(Math.max(L.length,1)*0.56)):0;
+  return `<svg viewBox="0 0 88 96" role="img" aria-label="Maillot noir${N?" numéro "+N:""}${L?" "+L:""}">
+  <path d="M30 3 L20 4.5 Q21 25 9 35 L9 93 L79 93 L79 35 Q67 25 68 4.5 L58 3 Q56 13 44 13 Q32 13 30 3 Z" fill="#0b0d0e" stroke="#c9d1d4" stroke-width="2"/>
+  <path d="M31.5 5.5 Q34.5 11 44 11 Q53.5 11 56.5 5.5" fill="none" stroke="#f2f4f5" stroke-width="2.6"/>
+  <path d="M22.5 6.5 Q22.5 27 11.5 36.5 M65.5 6.5 Q65.5 27 76.5 36.5" fill="none" stroke="#f2f4f5" stroke-width="2.6"/>
+  <path d="M25.5 7 Q25.5 27.5 15 38 M62.5 7 Q62.5 27.5 73 38" fill="none" stroke="#8a9599" stroke-width="1.4"/>
+  <line x1="9" y1="86" x2="79" y2="86" stroke="#8a9599" stroke-width="1.2"/>
+  ${L?`<text x="44" y="33" text-anchor="middle" font-family="Big Shoulders Display, Impact, sans-serif" font-weight="800" font-size="${fs.toFixed(1)}" letter-spacing=".6" fill="#f2f4f5">${L}</text>`:""}
+  <text x="44" y="${L?77:73}" text-anchor="middle" font-family="Big Shoulders Display, Impact, sans-serif" font-weight="800" font-size="${L?40:44}" fill="#f2f4f5" stroke="#8a9599" stroke-width="1.6" paint-order="stroke">${N}</text></svg>`;
+}
+function myJersey(){
+  let j=null; try{j=JSON.parse(localStorage.getItem("spurs_jersey")||"null")}catch(e){}
+  if(j&&j.id){const r=S.roster.find(x=>x.id===j.id); if(r) return {num:r.jersey,name:lastName(r.name),id:r.id}}
+  if(j&&j.num) return j;
+  const c=S.roster.find(x=>/castle/i.test(x.name)); return {num:c?.jersey||"5",name:"CASTLE",id:c?.id||""};
+}
+function drawLogo(){const j=myJersey();const b=$("#logoBtn");if(b)b.innerHTML=jerseySVG(j.num,j.name)}
+function openPicker(){
+  const cur=myJersey(); const L=rosterList().filter(r=>r.jersey);
+  let h=`<div class="bar-top"><div class="in"><button class="btn ghost" id="close">← Retour</button><span class="label">Ton maillot</span></div></div><div class="wrap">
+  <h2>Choisis ton joueur</h2><p class="muted" style="margin:0">Son numéro et son nom s'affichent sur le maillot en haut de l'appli.</p>`;
+  if(!L.length) h+=`<div class="empty">L'effectif apparaîtra après la prochaine mise à jour des données.</div>`;
+  else h+=`<div class="pick">${[...L].sort((a,b)=>{const n=x=>isNaN(parseInt(x.jersey))?99:parseInt(x.jersey);return n(a)-n(b)}).map(r=>`<button data-jy="${esc(r.id)}" aria-pressed="${r.id===cur.id}">${jerseySVG(r.jersey,lastName(r.name))}<span><b>${esc(r.name)}</b><small>n° ${esc(r.jersey)} · ${esc(posFR(r.pos))}</small></span></button>`).join("")}</div>`;
+  h+=`</div>`;
+  const sh=$("#sheet"); sh.innerHTML=h; sh.hidden=false; sh.scrollTop=0; S.open=null; S.openP=null;
+  $("#close").onclick=()=>{sh.hidden=true};
+}
+document.addEventListener("click",e=>{
+  if(e.target.closest("#logoBtn")){openPicker();return}
+  const b=e.target.closest("[data-jy]"); if(!b) return;
+  const r=S.roster.find(x=>x.id===b.dataset.jy); if(!r) return;
+  try{localStorage.setItem("spurs_jersey",JSON.stringify({id:r.id,num:r.jersey,name:lastName(r.name)}))}catch(e){}
+  drawLogo(); $("#sheet").hidden=true;
+});
+drawLogo();
+
 /* ---------- events ---------- */
 document.addEventListener("click",e=>{
   const t=e.target.closest("[data-t],[data-g],[data-f],[data-c],[data-watch],[data-p],[data-ps],[data-nf]"); if(!t) return;
@@ -507,7 +555,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#sheet").hidden
 try{JSON.parse(localStorage.getItem("spurs_watched")||"[]").forEach(i=>S.watched.add(i))}catch(e){}
 async function load(){
   try{const r=await fetch("data.json?t="+Date.now(),{cache:"no-store"});const j=await r.json();
-    S.games=j.games||[];S.meta=j.meta;S.standings=j.standings;S.injuries=j.injuries;S.teams=j.teams||{};S.players=j.players||{};S.roster=j.roster||[];S.pgames=j.playerGames||{};S.cbest=j.careerBest||{};S.news=j.news||[];
+    S.games=j.games||[];S.meta=j.meta;S.standings=j.standings;S.injuries=j.injuries;S.teams=j.teams||{};S.players=j.players||{};S.roster=j.roster||[];S.pgames=j.playerGames||{};S.cbest=j.careerBest||{};S.news=j.news||[];drawLogo();
     render();if(S.open)openGame(S.open,"noconf");else if(S.openP)openPlayer(S.openP,true)}
   catch(e){if(!S.games.length)$("#boot").textContent="Pas de connexion : les données s'afficheront dès que le téléphone sera en ligne."}
 }
