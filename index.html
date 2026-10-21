@@ -598,10 +598,18 @@ async function notifEnable(){
   catch(e){N.state="error";N.msg=String(e&&e.message||e)}
   render();
 }
+async function shareLink(){
+  const text="Pour activer mon rappel Spurs Courtside : ouvre ce lien et touche « Commit changes ».";
+  try{ if(navigator.share){ await navigator.share({title:"Rappel Spurs Courtside",text,url:N.link}); N.msg="Lien envoyé. Touche « C'est fait » une fois qu'il est enregistré."; render(); return } }catch(e){ if(e&&e.name==="AbortError") return }
+  try{ await navigator.clipboard.writeText(text+" "+N.link); N.msg="Lien copié : colle-le dans un message."; }
+  catch(e){ N.msg="Copie impossible : touche longuement « Enregistrer sur GitHub » pour copier le lien."; }
+  render();
+}
 function notifCard(){
   if(N.state==="on") return `<div class="card notif"><div class="row2"><span class="ok">🔔 Rappel activé</span><span class="muted">sur ce téléphone, à 12h45 les jours de match.</span></div></div>`;
-  if(N.state==="pending") return `<div class="card notif"><span class="label">Dernière étape</span><p style="margin:0">Enregistre ce téléphone sur GitHub pour recevoir le rappel : touche le bouton, puis <b>Commit changes</b> sur la page qui s'ouvre.</p>
-    <div class="row2"><a class="btn" href="${esc(N.link)}" target="_blank" rel="noopener" id="ghsave">Enregistrer sur GitHub</a><button class="btn ghost" data-nd="1">C'est fait</button></div></div>`;
+  if(N.state==="pending") return `<div class="card notif"><span class="label">Dernière étape</span><p style="margin:0">Ce téléphone doit être enregistré sur le GitHub de l'appli pour recevoir le rappel.</p>
+    <p style="margin:0" class="muted"><b>C'est ton GitHub :</b> touche « Enregistrer sur GitHub », puis <b>Commit changes</b> sur la page qui s'ouvre.<br><b>Ce n'est pas le tien :</b> touche « Envoyer le lien » et envoie-le à la personne qui gère l'appli ; elle l'ouvre et touche <b>Commit changes</b>.</p>
+    <div class="row2"><a class="btn" href="${esc(N.link)}" target="_blank" rel="noopener" id="ghsave">Enregistrer sur GitHub</a><button class="btn ghost" data-nshare="1">Envoyer le lien</button><button class="btn ghost" data-nd="1">C'est fait</button></div>${N.msg?`<span class="muted" style="font-size:12px">${esc(N.msg)}</span>`:""}</div>`;
   if(N.state==="off"||N.state==="error") return `<div class="card notif"><span class="label">Rappel de match</span><p style="margin:0">Reçois une notification à 12h45 les jours de match. Aucun score n'y apparaît.</p>
     <div class="row2"><button class="btn" data-ne="1">Activer le rappel</button>${N.state==="error"?`<span class="muted">Échec : ${esc(N.msg)}</span>`:""}</div></div>`;
   if(N.state==="denied") return `<div class="card notif"><span class="label">Rappel de match</span><p style="margin:0" class="muted">Les notifications sont bloquées. Autorise-les dans Paramètres Android → Applis → Spurs → Notifications, puis rouvre l'appli.</p></div>`;
@@ -609,6 +617,7 @@ function notifCard(){
 }
 document.addEventListener("click",e=>{
   if(e.target.closest("[data-ne]")) notifEnable();
+  if(e.target.closest("[data-nshare]")) shareLink();
   if(e.target.closest("[data-nd]")){navigator.serviceWorker.ready.then(r=>r.pushManager.getSubscription()).then(sub=>{try{localStorage.setItem("spurs_push_saved",sub.endpoint)}catch(e){}N.state="on";render()})}
 });
 if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").then(notifInit).catch(()=>{N.state="unsupported"})}
