@@ -120,6 +120,7 @@ tr.cut td{border-bottom:2px dashed var(--silver)}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
 .stat{padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:8px}
 .stat .v{font-family:var(--data);font-weight:600;font-size:24px;font-variant-numeric:tabular-nums}
+.notif{display:grid;gap:8px}.notif .row2{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.notif .ok{color:var(--win);font-weight:600}
 .empty{padding:16px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:var(--r)}
 .foot{font-size:12px;color:var(--muted);text-align:center}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
@@ -203,6 +204,7 @@ function vMatchs(){
     <div class="matchup"><div class="tm"><span class="ab">${ng.home?"SAS":esc(ng.opp)}</span><span class="nm">${esc(ng.home?"Spurs":name(ng.opp))}</span></div><span class="vs">${ng.home?"vs":"@"}</span><div class="tm r"><span class="ab">${ng.home?esc(ng.opp):"SAS"}</span><span class="nm">${esc(ng.home?name(ng.opp):"Spurs")}</span></div></div>
     <div class="clocks"><div class="clock"><div class="label">Heure US (ET)</div><div class="t">${tET(d)}</div><div class="d">${dUS(d)} · ${tCT(d)} à San Antonio</div></div>
     <div class="clock"><div class="label">Heure France</div><div class="t">${tFR(d)}</div><div class="d">${dFR(d)}</div></div></div></button>`;}
+  h+=notifCard();
   h+=`<div style="display:flex;justify-content:space-between;align-items:end;gap:10px;flex-wrap:wrap"><h2>Calendrier</h2><div class="seg">
   <button aria-pressed="${S.filter==="avenir"}" data-f="avenir">À venir</button><button aria-pressed="${S.filter==="joues"}" data-f="joues">Joués</button><button aria-pressed="${S.filter==="tous"}" data-f="tous">Tous</button></div></div>`;
   let L=sorted(); if(S.filter==="avenir")L=L.filter(g=>!isFinal(g)); if(S.filter==="joues")L=L.filter(isFinal).reverse();
@@ -263,7 +265,7 @@ function vStats(){
 function render(){
   if(!S.games.length) return;
   const v={matchs:vMatchs,classement:vClassement,blessures:vBlessures,stats:vStats}[S.tab]();
-  $("#main").innerHTML=v+`<div class="foot">Rappel de match chaque jour à 11h43. Données mises à jour à 8h43 et 23h43.</div>`;
+  $("#main").innerHTML=v+`<div class="foot">Rappel de match à 12h45 les jours de match. Données mises à jour deux fois par jour.</div>`;
   if(S.meta?.updatedAt) $("#upd").textContent="Mis à jour "+fmt(new Date(S.meta.updatedAt),"Europe/Paris",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
 }
 
@@ -336,7 +338,46 @@ async function load(){
   catch(e){if(!S.games.length)$("#boot").textContent="Pas de connexion : les données s'afficheront dès que le téléphone sera en ligne."}
 }
 load();setInterval(load,15*60e3);document.addEventListener("visibilitychange",()=>{if(!document.hidden)load()});
-if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{})}
+
+/* ---------- notifications push ---------- */
+const VAPID="BBNXMzA6zlWE1cp-D9NegLVFzqd9CFoNnkNug2NFyny4RcyMKiC-dlhgLkSL3qCKR1xZLLTBxwZDe1ORigvmDGI";
+const REPO="corentinussa-spec/spurs-courtside";
+const N={state:"?",link:null,msg:""};
+function b64u(s){const p="=".repeat((4-s.length%4)%4);const b=atob((s+p).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(b,c=>c.charCodeAt(0))}
+async function hashStr(t){try{const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(t));return [...new Uint8Array(d)].slice(0,6).map(x=>x.toString(16).padStart(2,"0")).join("")}catch(e){return String(Date.now())}}
+async function ghLink(sub){const j=JSON.stringify(sub);const id=await hashStr(sub.endpoint);
+  return `https://github.com/${REPO}/new/main/push?filename=${encodeURIComponent(id+".json")}&value=${encodeURIComponent(j)}`}
+async function notifInit(){
+  if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window)){N.state="unsupported";return render()}
+  try{const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();
+    let saved=false;try{saved=localStorage.getItem("spurs_push_saved")===(sub&&sub.endpoint)}catch(e){}
+    N.state=sub?(saved?"on":"pending"):(Notification.permission==="denied"?"denied":"off");
+    if(sub) N.link=await ghLink(sub.toJSON());}catch(e){N.state="off"}
+  render();
+}
+async function notifEnable(){
+  try{const perm=await Notification.requestPermission();
+    if(perm!=="granted"){N.state="denied";return render()}
+    const reg=await navigator.serviceWorker.ready;
+    const sub=(await reg.pushManager.getSubscription())||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(VAPID)});
+    N.link=await ghLink(sub.toJSON());N.state="pending";}
+  catch(e){N.state="error";N.msg=String(e&&e.message||e)}
+  render();
+}
+function notifCard(){
+  if(N.state==="on") return `<div class="card notif"><div class="row2"><span class="ok">🔔 Rappel activé</span><span class="muted">sur ce téléphone, à 12h45 les jours de match.</span></div></div>`;
+  if(N.state==="pending") return `<div class="card notif"><span class="label">Dernière étape</span><p style="margin:0">Enregistre ce téléphone sur GitHub pour recevoir le rappel : touche le bouton, puis <b>Commit changes</b> sur la page qui s'ouvre.</p>
+    <div class="row2"><a class="btn" href="${esc(N.link)}" target="_blank" rel="noopener" id="ghsave">Enregistrer sur GitHub</a><button class="btn ghost" data-nd="1">C'est fait</button></div></div>`;
+  if(N.state==="off"||N.state==="error") return `<div class="card notif"><span class="label">Rappel de match</span><p style="margin:0">Reçois une notification à 12h45 les jours de match. Aucun score n'y apparaît.</p>
+    <div class="row2"><button class="btn" data-ne="1">Activer le rappel</button>${N.state==="error"?`<span class="muted">Échec : ${esc(N.msg)}</span>`:""}</div></div>`;
+  if(N.state==="denied") return `<div class="card notif"><span class="label">Rappel de match</span><p style="margin:0" class="muted">Les notifications sont bloquées. Autorise-les dans Paramètres Android → Applis → Spurs → Notifications, puis rouvre l'appli.</p></div>`;
+  return "";
+}
+document.addEventListener("click",e=>{
+  if(e.target.closest("[data-ne]")) notifEnable();
+  if(e.target.closest("[data-nd]")){navigator.serviceWorker.ready.then(r=>r.pushManager.getSubscription()).then(sub=>{try{localStorage.setItem("spurs_push_saved",sub.endpoint)}catch(e){}N.state="on";render()})}
+});
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").then(notifInit).catch(()=>{N.state="unsupported"})}
 setInterval(()=>{if(S.tab==="matchs")render()},60000);
 </script>
 

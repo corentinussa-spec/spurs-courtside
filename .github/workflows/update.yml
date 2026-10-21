@@ -4,8 +4,8 @@ on:
   schedule:
     # Données : 8h43 et 23h43 à Paris en été (7h43 / 22h43 en hiver)
     - cron: "43 6,21 * * *"
-    # Rappel : lancé à 9h43 et 10h43 UTC, le script n'envoie qu'à 11 h heure de Paris
-    - cron: "43 9,10 * * *"
+    # Rappel : lancé à 10h45 et 11h45 UTC, le script n'envoie qu'à 12h45 heure de Paris
+    - cron: "45 10,11 * * *"
   workflow_dispatch:
     inputs:
       action:
@@ -47,10 +47,18 @@ jobs:
           git pull --rebase origin main || true
           git push
 
+      - name: Préparer l'envoi des notifications
+        if: github.event.schedule == '45 10,11 * * *' || (github.event_name == 'workflow_dispatch' && inputs.action != 'donnees')
+        run: pip install --quiet pywebpush
+
       - name: Rappel de match
-        if: github.event.schedule == '43 9,10 * * *'
+        if: github.event.schedule == '45 10,11 * * *'
+        env:
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
         run: python scripts/notify.py
 
       - name: Notification de test
         if: github.event_name == 'workflow_dispatch' && inputs.action != 'donnees'
+        env:
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
         run: python scripts/notify.py --test

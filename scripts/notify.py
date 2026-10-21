@@ -1,29 +1,48 @@
 #!/usr/bin/env python3
-"""Rappel de midi : envoie une notification ntfy s'il y a un match des Spurs
-dans les 24 h. Ne révèle jamais de résultat (anti-spoiler).
+"""Rappel de 12h45 : notification push envoyée directement à l'appli
+(Web Push) s'il y a un match des Spurs dans les 24 h.
+Ne révèle jamais de résultat (anti-spoiler).
 
+Abonnements : fichiers push/*.json (créés depuis l'appli).
+Clé privée : secret GitHub VAPID_PRIVATE_KEY.
 --test : envoie une notification de test, quelle que soit l'heure.
 """
-import json, os, sys, datetime, urllib.request
+import glob, json, os, sys, datetime
 from zoneinfo import ZoneInfo
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TOPIC = os.environ.get("NTFY_TOPIC", "spurs-courtside-11d649a9ae")
-APP = "https://corentinussa-spec.github.io/spurs-courtside/"
 PARIS, ET = ZoneInfo("Europe/Paris"), ZoneInfo("America/New_York")
 JOURS = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."]
 MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
 
-def send(title, body, tags="basketball"):
-    req = urllib.request.Request(f"https://ntfy.sh/{TOPIC}", data=body.encode("utf-8"), method="POST",
-                                 headers={"Title": title.encode("utf-8"), "Tags": tags, "Click": APP, "Priority": "default"})
-    urllib.request.urlopen(req, timeout=20).read()
+def send_all(title, body):
+    from pywebpush import webpush, WebPushException
+    key = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
+    if not key:
+        print("Secret VAPID_PRIVATE_KEY absent : impossible d'envoyer."); sys.exit(1)
+    subs = sorted(glob.glob(os.path.join(ROOT, "push", "*.json")))
+    if not subs:
+        print("Aucun téléphone abonné (dossier push/ vide)."); return
+    ok = 0
+    for f in subs:
+        try:
+            sub = json.load(open(f, encoding="utf-8"))
+            webpush(subscription_info=sub, data=json.dumps({"title": title, "body": body}, ensure_ascii=False),
+                    vapid_private_key=key, vapid_claims={"sub": "mailto:spurs-bot@users.noreply.github.com"}, ttl=6 * 3600)
+            ok += 1
+        except WebPushException as e:
+            code = getattr(e.response, "status_code", "?")
+            print(f"{os.path.basename(f)} : échec ({code})" + (" — abonnement expiré, réactive le rappel dans l'appli" if code in (404, 410) else ""))
+        except Exception as e:
+            print(f"{os.path.basename(f)} : erreur {e}")
+    print(f"Notification envoyée à {ok}/{len(subs)} téléphone(s).")
 
 def main():
     test = "--test" in sys.argv
     now = datetime.datetime.now(datetime.timezone.utc)
-    if not test and now.astimezone(PARIS).hour != 11:
-        print("Pas 11 h à Paris : rien à faire."); return
+    loc = now.astimezone(PARIS); mins = loc.hour * 60 + loc.minute
+    if not test and not (12 * 60 + 30 <= mins < 13 * 60 + 30):   # fenêtre 12h30-13h29 (GitHub peut retarder un peu)
+        print(f"Il est {loc:%H:%M} à Paris : hors de la fenêtre du rappel."); return
     data = json.load(open(os.path.join(ROOT, "data.json"), encoding="utf-8"))
     nxt = None
     for g in sorted(data.get("games", []), key=lambda g: g["start"]):
@@ -31,7 +50,7 @@ def main():
         if g.get("status") != "final" and start > now:
             nxt = (g, start); break
     if not nxt:
-        if test: send("Spurs Courtside", "Test réussi : les notifications fonctionnent. Aucun match à venir.")
+        if test: send_all("Spurs Courtside", "Test réussi : les rappels fonctionnent. Aucun match à venir.")
         return
     g, start = nxt
     p, e = start.astimezone(PARIS), start.astimezone(ET)
@@ -39,13 +58,10 @@ def main():
     us_h = e.strftime("%I:%M %p").lstrip("0")
     body = (f"Spurs {sep} {g['oppName']} — {p.hour}h{p.minute:02d} (heure FR) · {us_h} ET "
             f"({JOURS[e.weekday()]} {e.day} {MOIS[e.month-1]} aux USA)")
-    soon = start - now < datetime.timedelta(hours=24)
-    if soon:
-        send("🏀 Match cette nuit", body)
-        print("Notification envoyée.")
+    if start - now < datetime.timedelta(hours=24):
+        send_all("🏀 Match cette nuit", body)
     elif test:
-        send("Spurs Courtside", "Test réussi : les notifications fonctionnent. Prochain match : " + body)
-        print("Notification de test envoyée.")
+        send_all("Spurs Courtside", "Test réussi : les rappels fonctionnent. Prochain match : " + body)
     else:
         print("Pas de match dans les 24 h.")
 
