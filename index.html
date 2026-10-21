@@ -16,13 +16,14 @@ html{-webkit-text-size-adjust:100%}body{margin:0}img{max-width:100%}[hidden]{dis
   --body:"Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
   --data:"Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
   --r:10px;
+  --h-teal:#2bb7c0; --h-pink:#ef5d99; --h-orange:#f08a4b; --h-teal-tx:#6fd6dc; --h-orange-tx:#f6b07f; --h-pink-bg:rgba(239,93,153,.2); --h-pink-tx:#ff9cc4;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#101315; --surface:#191d20; --surface2:#23292d; --fg:#e9edef; --muted:#97a2a8; --line:#2f373c;
-  --silver:#a9b4b8; --teal:#2bb7c0; --pink:#ef5d99; --orange:#f08a4b; --win:#4cc483; --loss:#f0717a; color-scheme:dark}}
+  --silver:#a9b4b8; --teal:#2bb7c0; --pink:#ef5d99; --orange:#f08a4b; --win:#4cc483; --loss:#f0717a; --h-teal:#00a3ad; --h-pink:#d9468a; --h-orange:#f08a24; --h-teal-tx:#005f66; --h-orange-tx:#9a4a08; --h-pink-bg:#fbe1ec; --h-pink-tx:#a01d57; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#101315; --surface:#191d20; --surface2:#23292d; --fg:#e9edef; --muted:#97a2a8; --line:#2f373c;
-  --silver:#a9b4b8; --teal:#2bb7c0; --pink:#ef5d99; --orange:#f08a4b; --win:#4cc483; --loss:#f0717a; color-scheme:dark}
+  --silver:#a9b4b8; --teal:#2bb7c0; --pink:#ef5d99; --orange:#f08a4b; --win:#4cc483; --loss:#f0717a; --h-teal:#00a3ad; --h-pink:#d9468a; --h-orange:#f08a24; --h-teal-tx:#005f66; --h-orange-tx:#9a4a08; --h-pink-bg:#fbe1ec; --h-pink-tx:#a01d57; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
@@ -55,19 +56,25 @@ h2{font-family:var(--display);font-weight:800;text-transform:uppercase;font-size
 .num{font-family:var(--data);font-variant-numeric:tabular-nums}
 .muted{color:var(--muted)}
 /* next game hero */
-.hero{background:var(--fg);color:var(--bg);border-radius:var(--r);padding:18px 16px;display:grid;gap:12px;cursor:pointer;border:0;text-align:left;font:inherit;width:100%}
-.hero .label{color:inherit;opacity:.7}
+.hero{position:relative;overflow:hidden;background:var(--fg);color:var(--bg);border-radius:14px;padding:22px 16px 18px;display:grid;gap:12px;cursor:pointer;border:0;text-align:left;font:inherit;width:100%}
+.hero .band{position:absolute;left:0;right:0;top:0;height:6px;display:flex}
+.hero .band i{flex:1}
+.hero .band i:nth-child(1){background:var(--h-teal)}.hero .band i:nth-child(2){background:var(--h-pink)}.hero .band i:nth-child(3){background:var(--h-orange)}
+.hero .label{color:inherit;opacity:.75}
 .matchup{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .tm{display:grid;gap:2px;min-width:0}
-.tm .ab{font-family:var(--display);font-weight:800;font-size:44px;line-height:.9}
-.tm .nm{font-size:12px;opacity:.75}
-.tm.r{text-align:right}
-.vs{font-family:var(--display);font-size:18px;opacity:.6}
+.tm .ab{font-family:var(--display);font-weight:800;font-size:50px;line-height:.9}
+.tm .nm{font-size:13px;opacity:.8}
+.tm .ul{width:34px;height:3px;border-radius:2px;margin-top:4px}
+.tm.r{text-align:right;justify-items:end}
+.vs{font-family:var(--display);font-weight:800;font-size:18px;opacity:.6}
 .clocks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.clock{border:1px solid color-mix(in srgb,currentColor 25%,transparent);border-radius:8px;padding:8px 10px}
-.clock .t{font-family:var(--data);font-weight:600;font-size:22px;font-variant-numeric:tabular-nums}
+.clock{border:1px solid color-mix(in srgb,currentColor 22%,transparent);border-radius:10px;padding:9px 12px 10px;background:color-mix(in srgb,currentColor 4%,transparent)}
+.clock.us{border-top:3px solid var(--h-orange)}.clock.fr{border-top:3px solid var(--h-teal)}
+.hero .clock.us .label{color:var(--h-orange-tx);opacity:1}.hero .clock.fr .label{color:var(--h-teal-tx);opacity:1}
+.clock .t{font-family:var(--data);font-weight:600;font-size:24px;font-variant-numeric:tabular-nums}
 .clock .d{font-size:12px;opacity:.8;text-transform:capitalize}
-.count{font-family:var(--data);font-size:13px;opacity:.8}
+.count{padding:3px 9px;border-radius:999px;background:var(--h-pink-bg);color:var(--h-pink-tx);font:600 13px var(--data)}
 /* list rows */
 .list{display:grid}
 .month{font:600 11px var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:14px 2px 6px}
@@ -263,10 +270,10 @@ function vMatchs(){
   const ng=nextGame(); let h="";
   if(ng){const d=new Date(ng.start);const ms=d-Date.now();const hh=Math.floor(ms/3600e3),dd=Math.floor(hh/24);
     const cd=ms<=0?"En cours":dd>0?`Dans ${dd} j ${hh%24} h`:`Dans ${hh} h ${Math.floor(ms/60e3)%60} min`;
-    h+=`<button class="hero" data-g="${ng.id}"><div style="display:flex;justify-content:space-between;align-items:center"><span class="label">Prochain match · ${ng.home?"à domicile":"à l'extérieur"}</span><span class="count">${cd}</span></div>
-    <div class="matchup"><div class="tm"><span class="ab">${ng.home?"SAS":esc(ng.opp)}</span><span class="nm">${esc(ng.home?"Spurs":name(ng.opp))}</span></div><span class="vs">${ng.home?"vs":"@"}</span><div class="tm r"><span class="ab">${ng.home?esc(ng.opp):"SAS"}</span><span class="nm">${esc(ng.home?name(ng.opp):"Spurs")}</span></div></div>
-    <div class="clocks"><div class="clock"><div class="label">Heure US (ET)</div><div class="t">${tET(d)}</div><div class="d">${dUS(d)} · ${tCT(d)} à San Antonio</div></div>
-    <div class="clock"><div class="label">Heure France</div><div class="t">${tFR(d)}</div><div class="d">${dFR(d)}</div></div></div></button>`;}
+    h+=`<button class="hero" data-g="${ng.id}"><span class="band" aria-hidden="true"><i></i><i></i><i></i></span><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="label">Prochain match · ${ng.home?"à domicile":"à l'extérieur"}</span><span class="count">${cd}</span></div>
+    <div class="matchup"><div class="tm"><span class="ab">SAS</span><span class="nm">Spurs</span><span class="ul" style="background:var(--h-teal)"></span></div><span class="vs">${ng.home?"VS":"@"}</span><div class="tm r"><span class="ab">${esc(ng.opp)}</span><span class="nm">${esc(name(ng.opp))}</span><span class="ul" style="background:var(--h-orange)"></span></div></div>
+    <div class="clocks"><div class="clock us"><div class="label">Heure US (ET)</div><div class="t">${tET(d)}</div><div class="d">${dUS(d)} · ${tCT(d)} à San Antonio</div></div>
+    <div class="clock fr"><div class="label">Heure France</div><div class="t">${tFR(d)}</div><div class="d">${dFR(d)}</div></div></div></button>`;}
   if(["off","error","pending","denied"].includes(N.state)) h+=`<button class="card" data-myapp="1" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;padding:12px 14px"><span aria-hidden="true">🔕</span><span style="flex:1">Rappel de match inactif</span><span style="color:var(--teal);font-weight:600">Activer →</span></button>`;
   h+=`<div style="display:flex;justify-content:space-between;align-items:end;gap:10px;flex-wrap:wrap"><h2>Calendrier</h2><div class="seg">
   <button aria-pressed="${S.filter==="avenir"}" data-f="avenir">À venir</button><button aria-pressed="${S.filter==="joues"}" data-f="joues">Joués</button><button aria-pressed="${S.filter==="tous"}" data-f="tous">Tous</button></div></div>`;
