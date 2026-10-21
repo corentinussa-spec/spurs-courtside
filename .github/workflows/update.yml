@@ -1,0 +1,56 @@
+name: Mise à jour Spurs
+
+on:
+  schedule:
+    # Données : 8h43 et 23h43 à Paris en été (7h43 / 22h43 en hiver)
+    - cron: "43 6,21 * * *"
+    # Rappel : lancé à 9h43 et 10h43 UTC, le script n'envoie qu'à 11 h heure de Paris
+    - cron: "43 9,10 * * *"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Que faire ?"
+        type: choice
+        options: [tout, donnees, test-notification]
+        default: tout
+
+permissions:
+  contents: write
+
+concurrency:
+  group: spurs-data
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Mettre à jour les données
+        if: github.event.schedule == '43 6,21 * * *' || (github.event_name == 'workflow_dispatch' && inputs.action != 'test-notification')
+        run: python scripts/update.py
+
+      - name: Enregistrer les données
+        if: github.event.schedule == '43 6,21 * * *' || (github.event_name == 'workflow_dispatch' && inputs.action != 'test-notification')
+        run: |
+          git config user.name "spurs-bot"
+          git config user.email "spurs-bot@users.noreply.github.com"
+          git add data.json cache
+          if git diff --cached --quiet; then echo "Rien de nouveau."; exit 0; fi
+          git commit -m "Mise à jour des données"
+          git pull --rebase origin main || true
+          git push
+
+      - name: Rappel de match
+        if: github.event.schedule == '43 9,10 * * *'
+        run: python scripts/notify.py
+
+      - name: Notification de test
+        if: github.event_name == 'workflow_dispatch' && inputs.action != 'donnees'
+        run: python scripts/notify.py --test
