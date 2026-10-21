@@ -267,7 +267,7 @@ function vMatchs(){
     <div class="matchup"><div class="tm"><span class="ab">${ng.home?"SAS":esc(ng.opp)}</span><span class="nm">${esc(ng.home?"Spurs":name(ng.opp))}</span></div><span class="vs">${ng.home?"vs":"@"}</span><div class="tm r"><span class="ab">${ng.home?esc(ng.opp):"SAS"}</span><span class="nm">${esc(ng.home?name(ng.opp):"Spurs")}</span></div></div>
     <div class="clocks"><div class="clock"><div class="label">Heure US (ET)</div><div class="t">${tET(d)}</div><div class="d">${dUS(d)} · ${tCT(d)} à San Antonio</div></div>
     <div class="clock"><div class="label">Heure France</div><div class="t">${tFR(d)}</div><div class="d">${dFR(d)}</div></div></div></button>`;}
-  h+=notifCard();
+  if(["off","error","pending","denied"].includes(N.state)) h+=`<button class="card" data-myapp="1" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;padding:12px 14px"><span aria-hidden="true">🔕</span><span style="flex:1">Rappel de match inactif</span><span style="color:var(--teal);font-weight:600">Activer →</span></button>`;
   h+=`<div style="display:flex;justify-content:space-between;align-items:end;gap:10px;flex-wrap:wrap"><h2>Calendrier</h2><div class="seg">
   <button aria-pressed="${S.filter==="avenir"}" data-f="avenir">À venir</button><button aria-pressed="${S.filter==="joues"}" data-f="joues">Joués</button><button aria-pressed="${S.filter==="tous"}" data-f="tous">Tous</button></div></div>`;
   let L=sorted(); if(S.filter==="avenir")L=L.filter(g=>!isFinal(g)); if(S.filter==="joues")L=L.filter(isFinal).reverse();
@@ -326,9 +326,10 @@ function vStats(){
   return h+teamTiles("SAS")+`<div class="label">Moyennes par joueur</div>`+playerTable("SAS");
 }
 function render(){
+  if(S.openApp&&!$("#sheet").hidden) openPicker(true);
   if(!S.games.length) return;
   const v={matchs:vMatchs,classement:vClassement,blessures:vBlessures,stats:vStats,effectif:vEffectif,actus:vActus}[S.tab]();
-  $("#main").innerHTML=v+`<div class="foot">Rappel de match à 12h45 les jours de match. Données mises à jour deux fois par jour.</div>`;
+  $("#main").innerHTML=v+`<div class="foot">Touche le maillot en haut pour ton joueur et le rappel de match.</div>`;
   if(S.meta?.updatedAt) $("#upd").textContent="Données à jour · "+fmt(new Date(S.meta.updatedAt),"Europe/Paris",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
 }
 
@@ -339,7 +340,7 @@ function boxTable(rows){
   rows.map(p=>`<tr><td>${esc(p.name)}</td><td>${p.pts}</td><td>${p.reb}</td><td>${p.ast}</td><td>${p.stl}</td><td>${p.blk}</td><td>${p.fgm}-${p.fga}</td><td>${p.tpm}-${p.tpa}</td><td>${p.ftm}-${p.fta}</td><td>${p.pm>0?"+":""}${p.pm}</td></tr>`).join("")+`</tbody></table></div>`;
 }
 function openGame(id,quiet){
-  const g=S.games.find(x=>x.id===id); if(!g) return; S.open=id; S.openP=null;
+  const g=S.games.find(x=>x.id===id); if(!g) return; S.open=id; S.openP=null; S.openApp=false;
   const d=new Date(g.start); const o=g.opp; const lock=locked(g); const anyL=anyLock();
   const sas=record("SAS"), op=record(o); const hh=h2h(o);
   let h=`<div class="bar-top"><div class="in"><button class="btn ghost" id="close" aria-label="Fermer">← Retour</button><span class="label">${g.home?"Domicile":"Extérieur"} · ${esc(name(o))}</span></div></div><div class="wrap">`;
@@ -446,7 +447,7 @@ function curve(rows){
   <span class="muted" style="font-size:11px">${vis.every(Boolean)?`Pointillés : sa moyenne sur ces matchs (${fr1(avg).replace(".",",")}).`:"Le point du dernier match apparaît après ton replay."}</span></div>`;
 }
 function openPlayer(id,quiet){
-  const r=rosterList().find(x=>x.id===id); if(!r) return; S.openP=id; S.open=null;
+  const r=rosterList().find(x=>x.id===id); if(!r) return; S.openP=id; S.open=null; S.openApp=false;
   const rows=prows(r); const fin=[...S.games].filter(isFinal).sort((a,b)=>a.start.localeCompare(b.start));
   const g1=fin[fin.length-1], g2=fin[fin.length-2]; const lock=anyLock();
   const line=g=>rows.find(x=>x.gid===g.id);
@@ -518,22 +519,22 @@ function myJersey(){
   const c=S.roster.find(x=>/castle/i.test(x.name)); return {num:c?.jersey||"5",name:"CASTLE",id:c?.id||""};
 }
 function drawLogo(){const j=myJersey();const b=$("#logoBtn");if(b)b.innerHTML=jerseySVG(j.num,j.name)}
-function openPicker(){
-  const cur=myJersey(); const L=rosterList().filter(r=>r.jersey);
-  let h=`<div class="bar-top"><div class="in"><button class="btn ghost" id="close">← Retour</button><span class="label">Ton maillot</span></div></div><div class="wrap">
-  <h2>Choisis ton joueur</h2><p class="muted" style="margin:0">Son numéro et son nom s'affichent sur le maillot en haut de l'appli.</p>`;
+function openPicker(quiet){
+  const cur=myJersey(); const L=rosterList().filter(r=>r.jersey); S.openApp=true;
+  let h=`<div class="bar-top"><div class="in"><button class="btn ghost" id="close">← Retour</button><span class="label">Mon appli</span></div></div><div class="wrap">
+  <h2>Ton maillot</h2><p class="muted" style="margin:0">Choisis ton joueur : son numéro et son nom s'affichent sur le maillot en haut de l'appli.</p>`;
   if(!L.length) h+=`<div class="empty">L'effectif apparaîtra après la prochaine mise à jour des données.</div>`;
   else h+=`<div class="pick">${[...L].sort((a,b)=>{const n=x=>isNaN(parseInt(x.jersey))?99:parseInt(x.jersey);return n(a)-n(b)}).map(r=>`<button data-jy="${esc(r.id)}" aria-pressed="${r.id===cur.id}">${jerseySVG(r.jersey,lastName(r.name))}<span><b>${esc(r.name)}</b><small>n° ${esc(r.jersey)} · ${esc(posFR(r.pos))}</small></span></button>`).join("")}</div>`;
-  h+=`</div>`;
-  const sh=$("#sheet"); sh.innerHTML=h; sh.hidden=false; sh.scrollTop=0; S.open=null; S.openP=null;
-  $("#close").onclick=()=>{sh.hidden=true};
+  h+=`<h2>Rappel de match</h2>${notifCard()||(N.state==="unsupported"?`<div class="empty">Les notifications ne sont pas disponibles sur ce navigateur. Installe l'appli depuis Chrome pour les recevoir.</div>`:"")}</div>`;
+  const sh=$("#sheet"); const y=sh.scrollTop; sh.innerHTML=h; sh.hidden=false; sh.scrollTop=quiet?y:0; S.open=null; S.openP=null;
+  $("#close").onclick=()=>{sh.hidden=true;S.openApp=false};
 }
 document.addEventListener("click",e=>{
-  if(e.target.closest("#logoBtn")){openPicker();return}
+  if(e.target.closest("#logoBtn")||e.target.closest("[data-myapp]")){openPicker();return}
   const b=e.target.closest("[data-jy]"); if(!b) return;
   const r=S.roster.find(x=>x.id===b.dataset.jy); if(!r) return;
   try{localStorage.setItem("spurs_jersey",JSON.stringify({id:r.id,num:r.jersey,name:lastName(r.name)}))}catch(e){}
-  drawLogo(); $("#sheet").hidden=true;
+  drawLogo(); openPicker(true);
 });
 drawLogo();
 
@@ -549,7 +550,7 @@ document.addEventListener("click",e=>{
   else if(t.dataset.ps){S.psort=t.dataset.ps;render()}
   else if(t.dataset.nf){S.nf=t.dataset.nf;render()}
 });
-document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#sheet").hidden){$("#sheet").hidden=true;S.open=null;S.openP=null}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#sheet").hidden){$("#sheet").hidden=true;S.open=null;S.openP=null;S.openApp=false}});
 
 /* ---------- data ---------- */
 try{JSON.parse(localStorage.getItem("spurs_watched")||"[]").forEach(i=>S.watched.add(i))}catch(e){}
