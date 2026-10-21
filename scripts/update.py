@@ -315,6 +315,41 @@ def injuries(teams):
                            "updated": str(inj.get("date", ""))[:10]})
     return {"teams": out, "asOf": datetime.date.today().isoformat()}
 
+
+# ---------------------------------------------------------------- effectif
+def roster(team="SAS"):
+    j = get(f"{SITE}/teams/{espn(team)}/roster")
+    if not j: return None
+    raw = j.get("athletes", [])
+    if raw and isinstance(raw[0], dict) and "items" in raw[0]:
+        raw = [a for grp in raw for a in grp.get("items", [])]
+    out = []
+    for a in raw:
+        aid = str(a.get("id", ""))
+        if not aid: continue
+        pos = a.get("position") or {}
+        status = (a.get("status") or {}).get("type") or ""
+        out.append({"id": aid, "name": a.get("displayName") or a.get("fullName") or "?",
+                    "jersey": str(a.get("jersey") or ""), "pos": pos.get("abbreviation", ""),
+                    "heightIn": num(a.get("height"), None), "weightLb": num(a.get("weight"), None),
+                    "age": a.get("age"), "exp": (a.get("experience") or {}).get("years"),
+                    "photo": (a.get("headshot") or {}).get("href") or f"https://a.espncdn.com/i/headshots/nba/players/full/{aid}.png",
+                    "active": status != "inactive"})
+    return out or None
+
+def player_games(boxes, gids, games_by_id):
+    """Ligne de stats de chaque joueur des Spurs pour chaque match joué (saison régulière)."""
+    keys = ["min", "pts", "reb", "ast", "stl", "blk", "tov", "fgm", "fga", "tpm", "tpa", "ftm", "fta", "pm"]
+    out = {}
+    for b, gid in zip(boxes, gids):
+        g = games_by_id.get(gid, {})
+        for p in b["teams"]["SAS"]["players"]:
+            pid = p["id"] or p["name"]
+            row = {"gid": gid, "opp": g.get("opp"), "home": g.get("home"), "start": g.get("start")}
+            for k in keys: row[k] = p[k]
+            out.setdefault(pid, []).append(row)
+    return out
+
 # ---------------------------------------------------------------- assemblage
 def main():
     data = rjson(DATA, {}) or {}
@@ -326,7 +361,7 @@ def main():
         log("Calendrier injoignable : données inchangées."); sys.exit(1)
     log(f"Calendrier : {len(sched)} matchs")
 
-    games = []; sas_boxes = []
+    games = []; sas_boxes = []; sas_gids = []
     for ev in sorted(sched.values(), key=lambda e: e["start"]):
         start = parse_date(ev["start"])
         gid = start.astimezone(ET).strftime("%Y%m%d") + "-" + ev["opp"]
@@ -348,7 +383,7 @@ def main():
                           "periods": [{"q": str(i + 1), "SAS": (me["periods"] + [0] * n)[i], "OPP": (op["periods"] + [0] * n)[i]} for i in range(n)],
                           "teamStats": {"SAS": team_totals(me), "OPP": team_totals(op)},
                           "box": {"SAS": box_rows(me), "OPP": box_rows(op)}, "records": recs, "recordsV": 2})
-                if not ev["playoffs"]: sas_boxes.append(b)
+                if not ev["playoffs"]: sas_boxes.append(b); sas_gids.append(gid)
             elif gid in old_games:
                 g = old_games[gid]
         games.append(g)
@@ -378,6 +413,20 @@ def main():
         players[t] = {"abbr": t, "players": pl}
         log(f"Équipe {t} : {len(bx)} matchs analysés")
     data["teams"] = teams; data["players"] = players
+
+    # effectif : fiches joueurs
+    by_id = {g["id"]: g for g in games}
+    data["playerGames"] = player_games(sas_boxes, sas_gids, by_id)
+    ro = roster("SAS")
+    if ro: data["roster"] = ro
+    best = data.get("careerBest", {})
+    for r in data.get("roster", []):
+        try:
+            c = career_before(r["id"])
+            if c is not None: best[r["id"]] = c
+        except Exception as e: log("  carrière", r["name"], e)
+    data["careerBest"] = best
+    log(f"Effectif : {len(data.get('roster', []))} joueurs, {len(data['playerGames'])} avec des matchs")
 
     inj = injuries(["SAS"] + upcoming[:2])
     if inj: data["injuries"] = inj
