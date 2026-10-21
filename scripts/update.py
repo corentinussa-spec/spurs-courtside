@@ -350,6 +350,80 @@ def player_games(boxes, gids, games_by_id):
             out.setdefault(pid, []).append(row)
     return out
 
+
+# ---------------------------------------------------------------- actualités
+import hashlib, urllib.parse
+TR_CACHE = os.path.join(CACHE, "translations.json")
+_tr = None
+def translate(text):
+    """Traduction anglais -> français (service gratuit), mise en cache. Échec : texte d'origine."""
+    global _tr
+    if not text: return text
+    if _tr is None: _tr = rjson(TR_CACHE, {}) or {}
+    k = hashlib.sha1(text.encode("utf-8")).hexdigest()[:16]
+    if k in _tr: return _tr[k]
+    url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=fr&dt=t&q=" + urllib.parse.quote(text)
+    j = get(url, tries=2)
+    try:
+        out = "".join(seg[0] for seg in j[0] if seg and seg[0])
+    except Exception:
+        return text
+    if out:
+        _tr[k] = out
+        wjson(TR_CACHE, _tr)
+    return out or text
+
+MOVE_WORDS = ("trade", "traded", "acquire", "sign ", "signs", "signed", "waive", "waived", "release", "extension", "contract", "two-way", "10-day", "deal", "claim")
+TALK_WORDS = ("press conference", "media day", "postgame", "presser", "practice", "coach", "mitch johnson", "shootaround", "interview")
+def espn_news():
+    j = get(f"{SITE}/news?team=sa&limit=40")
+    if not j: return None
+    out = []
+    for a in j.get("articles", []):
+        aid = str(a.get("id") or a.get("dataSourceIdentifier") or a.get("headline", ""))[:64]
+        head = a.get("headline") or ""; desc = a.get("description") or ""
+        if not head or not a.get("published"): continue
+        cats = [c.get("description", "") for c in a.get("categories", []) if c.get("type") == "team"]
+        if cats and "San Antonio Spurs" not in cats: continue
+        low = (head + " " + desc).lower()
+        kind = "effectif" if any(w in low for w in MOVE_WORDS) else ("conference" if any(w in low for w in TALK_WORDS) else "presse")
+        out.append({"id": "espn-" + aid, "kind": kind, "time": iso(parse_date(a["published"])),
+                    "title": translate(head), "text": translate(desc), "url": ((a.get("links") or {}).get("web") or {}).get("href", ""),
+                    "source": "ESPN"})
+    return out
+
+def auto_events(old, new, now_iso, first_run):
+    """Arrivées/départs de joueurs et changements de blessures, détectés entre deux mises à jour."""
+    ev = []
+    oro = {r["id"]: r for r in old.get("roster", [])}; nro = {r["id"]: r for r in new.get("roster", [])}
+    changes = len(set(oro) ^ set(nro))
+    if oro and nro and changes <= 4:        # au-delà : probablement une liste incomplète côté source, on ignore
+        for i, r in nro.items():
+            if i not in oro:
+                ev.append({"id": f"in-{i}-{now_iso[:10]}", "kind": "effectif", "time": now_iso, "title": f"{r['name']} rejoint l'effectif",
+                           "text": " · ".join(x for x in [f"n° {r['jersey']}" if r.get("jersey") else "", r.get("pos", "")] if x)})
+        for i, r in oro.items():
+            if i not in nro:
+                ev.append({"id": f"out-{i}-{now_iso[:10]}", "kind": "effectif", "time": now_iso, "title": f"{r['name']} quitte l'effectif", "text": ""})
+    oi = {p["player"]: p for p in ((old.get("injuries") or {}).get("teams") or {}).get("SAS", [])}
+    ni = {p["player"]: p for p in ((new.get("injuries") or {}).get("teams") or {}).get("SAS", [])}
+    if not (new.get("injuries") or {}).get("teams"): return ev
+    for n, p in ni.items():
+        o = oi.get(n)
+        if first_run or not o or o.get("status") != p.get("status"):
+            t = (p.get("updated") + "T12:00:00Z") if first_run and p.get("updated") else now_iso
+            dur = p.get("duration", "")
+            ev.append({"id": f"inj-{n}-{p.get('status')}-{t[:10]}", "kind": "blessure", "time": t,
+                       "title": f"{n} : {p.get('status', '').lower()}" if p.get("status") else n,
+                       "text": p.get("injury", "") + (f" · {dur[0].lower() + dur[1:]}" if dur and "communiqu" not in dur else ""),
+                       "severity": "out" if "absent" in p.get("status", "").lower() else "q"})
+    if not first_run:
+        for n in oi:
+            if n not in ni:
+                ev.append({"id": f"back-{n}-{now_iso[:10]}", "kind": "blessure", "time": now_iso, "title": f"{n} est de retour",
+                           "text": "N'apparaît plus sur le rapport des blessures", "severity": "ok"})
+    return ev
+
 # ---------------------------------------------------------------- assemblage
 def main():
     data = rjson(DATA, {}) or {}
@@ -430,6 +504,19 @@ def main():
 
     inj = injuries(["SAS"] + upcoming[:2])
     if inj: data["injuries"] = inj
+
+    # actualités
+    prev = rjson(DATA, {}) or {}
+    first = "news" not in prev
+    items = {n["id"]: n for n in prev.get("news", [])}
+    try:
+        for n in auto_events(prev, data, iso(now), first): items.setdefault(n["id"], n)
+    except Exception as e: log("  actus auto :", e)
+    try:
+        for n in (espn_news() or []): items[n["id"]] = n
+    except Exception as e: log("  actus ESPN :", e)
+    data["news"] = sorted(items.values(), key=lambda n: n["time"], reverse=True)[:80]
+    log(f"Actualités : {len(data['news'])}")
 
     data["meta"] = {"updatedAt": iso(now), "season": SEASON_LABEL, "source": "ESPN", "note": "Mise à jour automatique (GitHub Actions)"}
     tmp = DATA + ".tmp"; wjson(tmp, data); json.load(open(tmp, encoding="utf-8")); os.replace(tmp, DATA)
