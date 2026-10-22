@@ -379,23 +379,40 @@ def player_games(boxes, gids, games_by_id):
 import hashlib, urllib.parse
 TR_CACHE = os.path.join(CACHE, "translations.json")
 _tr = None
+def _tr_google(text):
+    url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=fr&dt=t&q=" + urllib.parse.quote(text)
+    j = get(url, tries=3)
+    try:
+        return "".join(seg[0] for seg in j[0] if seg and seg[0])
+    except Exception:
+        return ""
+
+def _tr_mymemory(text):
+    """Service de secours si Google refuse (limite de requêtes)."""
+    j = get("https://api.mymemory.translated.net/get?langpair=en|fr&q=" + urllib.parse.quote(text[:480]), tries=2)
+    try:
+        out = (j.get("responseData") or {}).get("translatedText") or ""
+        return "" if "MYMEMORY WARNING" in out.upper() else out
+    except Exception:
+        return ""
+
 def translate(text):
-    """Traduction anglais -> français (service gratuit), mise en cache. Échec : texte d'origine."""
+    """Traduction anglais -> français (service gratuit, avec secours), mise en cache. Échec : texte d'origine."""
     global _tr
     if not text: return text
     if _tr is None: _tr = rjson(TR_CACHE, {}) or {}
     k = hashlib.sha1(text.encode("utf-8")).hexdigest()[:16]
     if k in _tr: return _tr[k]
-    url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=fr&dt=t&q=" + urllib.parse.quote(text)
-    j = get(url, tries=2)
-    try:
-        out = "".join(seg[0] for seg in j[0] if seg and seg[0])
-    except Exception:
-        return text
-    if out:
+    out = _tr_google(text)
+    if not out or out.strip() == text.strip():
+        time.sleep(2)
+        out = _tr_google(text) or _tr_mymemory(text)
+    if out and out.strip() != text.strip():
         _tr[k] = out
         wjson(TR_CACHE, _tr)
-    return out or text
+        return out
+    log(f"  traduction impossible pour l'instant : {text[:60]}")
+    return text
 
 MOVE_WORDS = ("trade", "traded", "acquire", "sign ", "signs", "signed", "waive", "waived", "release", "extension", "contract", "two-way", "10-day", "deal", "claim")
 TALK_WORDS = ("press conference", "media day", "postgame", "presser", "practice", "coach", "mitch johnson", "shootaround", "interview")
@@ -411,9 +428,10 @@ def espn_news():
         if cats and "San Antonio Spurs" not in cats: continue
         low = (head + " " + desc).lower()
         kind = "effectif" if any(w in low for w in MOVE_WORDS) else ("conference" if any(w in low for w in TALK_WORDS) else "presse")
+        th, td = translate(head), translate(desc)
         out.append({"id": "espn-" + aid, "kind": kind, "time": iso(parse_date(a["published"])),
-                    "title": translate(head), "text": translate(desc), "url": ((a.get("links") or {}).get("web") or {}).get("href", ""),
-                    "source": "ESPN"})
+                    "title": th, "text": td, "url": ((a.get("links") or {}).get("web") or {}).get("href", ""),
+                    "source": "ESPN", "tr": th != head})
     return out
 
 def auto_events(old, new, now_iso, first_run):
@@ -540,6 +558,12 @@ def main():
     except Exception as e: log("  actus auto :", e)
     try:
         for n in (espn_news() or []): items[n["id"]] = n
+        # nouvelle tentative pour les actus restées en anglais (service de traduction indisponible la fois d'avant)
+        for n in items.values():
+            if n.get("source") == "ESPN" and n.get("tr") is False:
+                t = translate(n["title"])
+                if t != n["title"]:
+                    n["title"], n["text"], n["tr"] = t, translate(n.get("text", "")), True
     except Exception as e: log("  actus ESPN :", e)
     data["news"] = sorted(items.values(), key=lambda n: n["time"], reverse=True)[:80]
     log(f"Actualités : {len(data['news'])}")
