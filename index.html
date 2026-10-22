@@ -465,7 +465,7 @@ function openPlayer(id,quiet){
   const hIn=r.heightIn, wLb=r.weightLb;
   const meta=[[hIn?(hIn*0.0254).toFixed(2).replace(".",",")+" m":"–",hIn?`taille · ${Math.floor(hIn/12)}'${Math.round(hIn%12)}"`:"taille"],
     [wLb?Math.round(wLb*0.4536)+" kg":"–",wLb?`poids · ${Math.round(wLb)} lb`:"poids"],
-    [r.age?r.age+" ans":"–","âge"],[r.exp!=null?(r.exp===0?"Rookie":(r.exp+1)+"e"):"–",r.exp===0?"1re saison":"saison NBA"]];
+    [r.age?r.age+" ans":"–","âge"],[r.exp!=null?(r.exp<=1?"Rookie":r.exp+"e"):"–",r.exp!=null&&r.exp<=1?"1re saison":"saison NBA"]];
   let h=`<div class="bar-top"><div class="in"><button class="btn ghost" id="close">← Effectif</button></div></div>
   <div class="phero"><span class="bign" aria-hidden="true">${esc(r.jersey||"")}</span>
     <div class="who"><span class="label">${esc(posFR(r.pos))}${r.jersey?" · n° "+esc(r.jersey):""}</span><h3>${esc(r.name)}</h3><div>${injChip(r.name,true)}</div></div>
