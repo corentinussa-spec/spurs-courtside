@@ -195,6 +195,10 @@ tr.cut td{border-bottom:2px dashed var(--silver)}
 .ktag.conference{background:color-mix(in srgb,var(--pink) 14%,transparent);color:var(--pink)}
 .cupb{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:color-mix(in srgb,var(--orange) 18%,transparent);color:var(--orange);font:600 10px var(--data);letter-spacing:.06em;text-transform:uppercase;vertical-align:2px}
 .hero .cupb{background:var(--h-pink-bg);color:var(--h-pink-tx)}
+.cupb.solo{margin-left:0;margin-top:3px;white-space:nowrap}
+.row.cup{box-shadow:inset 3px 0 0 var(--orange)}
+.cupban{justify-self:center;margin:0 auto;display:block;width:max-content;max-width:100%;padding:5px 12px;border-radius:999px;background:color-mix(in srgb,var(--orange) 18%,transparent);color:var(--orange);font:700 12px var(--data);letter-spacing:.06em;text-transform:uppercase;text-align:center}
+.wl{display:flex;flex-wrap:wrap;gap:8px}
 .empty{padding:16px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:var(--r)}
 .foot{font-size:12px;color:var(--muted);text-align:center}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
@@ -250,10 +254,14 @@ async function markWatched(ids){
   try{localStorage.setItem("spurs_watched",JSON.stringify([...S.watched]))}catch(e){}
   render(); if(S.open) openGame(S.open,true); else if(S.openP) openPlayer(S.openP,true);
 }
-function veil(text){
-  const L=lockedGames(); const g=L[L.length-1];
-  return `<div class="veil"><span class="label">Anti-spoiler</span><p>${esc(text)}</p>
-  <button class="btn" data-watch="${L.map(x=>x.id).join(",")}">J'ai vu ${L.length>1?"les matchs":"le match contre "+esc(name(g.opp).split(" ").pop())}</button></div>`;
+const gShort=g=>`${g.home?"vs":"@"} ${esc(name(g.opp).split(" ").pop())} · ${fmt(new Date(g.start),"Europe/Paris",{day:"numeric",month:"short"})}`;
+function watchBtns(L){
+  if(L.length===1) return `<button class="btn" data-watch="${L[0].id}">J'ai vu le match contre ${esc(name(L[0].opp).split(" ").pop())}</button>`;
+  return `<span class="muted" style="font-size:13px">Touche chaque match que tu as vu :</span><div class="wl">${L.map(g=>`<button class="btn ghost" data-watch="${g.id}">J'ai vu ${gShort(g)}</button>`).join("")}</div>
+  <button class="btn" data-watch="${L.map(x=>x.id).join(",")}">J'ai vu les ${L.length} matchs</button>`;
+}
+function veil(text,L=lockedGames()){
+  return `<div class="veil"><span class="label">Anti-spoiler</span><p>${esc(text)}</p>${watchBtns(L)}</div>`;
 }
 
 /* ---------- derived ---------- */
@@ -268,13 +276,13 @@ function record(abbr){
 }
 
 /* ---------- views ---------- */
-const cupBadge=g=>g.cup?`<span class="cupb">NBA Cup${g.cupRound?" · "+esc(g.cupRound):""}</span>`:"";
+const cupBadge=(g,cls="")=>g.cup?`<span class="cupb ${cls}">🏆 NBA Cup${g.cupRound?" · "+esc(g.cupRound):""}</span>`:"";
 
 function vMatchs(){
   const ng=nextGame(); let h="";
   if(ng){const d=new Date(ng.start);const ms=d-Date.now();const hh=Math.floor(ms/3600e3),dd=Math.floor(hh/24);
     const cd=ms<=0?"En cours":dd>0?`Dans ${dd} j ${hh%24} h`:`Dans ${hh} h ${Math.floor(ms/60e3)%60} min`;
-    h+=`<button class="hero" data-g="${ng.id}"><span class="band" aria-hidden="true"><i></i><i></i><i></i></span><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="label">Prochain match · ${ng.home?"à domicile":"à l'extérieur"}${cupBadge(ng)}</span><span class="count">${cd}</span></div>
+    h+=`<button class="hero" data-g="${ng.id}"><span class="band" aria-hidden="true"><i></i><i></i><i></i></span><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="label">Prochain match · ${ng.home?"à domicile":"à l'extérieur"}</span><span class="count">${cd}</span></div>${ng.cup?`<div>${cupBadge(ng,"solo")}</div>`:""}
     <div class="matchup"><div class="tm"><span class="ab">SAS</span><span class="nm">Spurs</span><span class="ul" style="background:var(--h-teal)"></span></div><span class="vs">${ng.home?"VS":"@"}</span><div class="tm r"><span class="ab">${esc(ng.opp)}</span><span class="nm">${esc(name(ng.opp))}</span><span class="ul" style="background:var(--h-orange)"></span></div></div>
     <div class="clocks"><div class="clock us"><div class="label">Heure US (ET)</div><div class="t">${tET(d)}</div><div class="d">${dUS(d)} · ${tCT(d)} à San Antonio</div></div>
     <div class="clock fr"><div class="label">Heure France</div><div class="t">${tFR(d)}</div><div class="d">${dFR(d)}</div></div></div></button>`;}
@@ -289,15 +297,15 @@ function vMatchs(){
     let chip;
     if(isFinal(g)){chip=locked(g)?`<span class="chip hide">Résultat masqué</span>`:`<span class="chip ${res(g)==="V"?"w":"l"}">${res(g)} ${g.score.SAS}-${g.score.OPP}</span>`}
     else chip=g===nextGame()?`<span class="chip next">Prochain</span>`:`<span class="chip">${tFR(d)} FR</span>`;
-    out.push(`<button class="row" data-g="${g.id}"><div class="dt"><b>${fmt(d,"Europe/Paris",{day:"2-digit"})}</b><span>${fmt(d,"Europe/Paris",{weekday:"short"})}</span></div>
-    <div class="op"><div class="n">${g.home?"vs":"@"} ${esc(name(g.opp))}${cupBadge(g)}</div><div class="s">US : ${dUS(d)}, ${tET(d)} ET</div></div>${chip}</button>`)});
+    out.push(`<button class="row${g.cup?" cup":""}" data-g="${g.id}"><div class="dt"><b>${fmt(d,"Europe/Paris",{day:"2-digit"})}</b><span>${fmt(d,"Europe/Paris",{weekday:"short"})}</span></div>
+    <div class="op"><div class="n">${g.home?"vs":"@"} ${esc(name(g.opp))}</div>${g.cup?`<div><span class="cupb solo">🏆 NBA Cup</span></div>`:""}<div class="s">US : ${dUS(d)}, ${tET(d)} ET</div></div>${chip}</button>`)});
   out[out.length-1]=out[out.length-1].replace('class="row','class="row last');
   return h+`<div class="list">${out.join("")}</div>`;
 }
 function vClassement(){
   const st=S.standings; if(!st) return `<h2>Classement</h2><div class="empty">Le classement s'affiche après la prochaine mise à jour.</div>`;
   let h=`<div style="display:flex;justify-content:space-between;align-items:end;gap:10px;flex-wrap:wrap"><h2>Classement</h2><div class="seg"><button aria-pressed="${S.conf==="W"}" data-c="W">Ouest</button><button aria-pressed="${S.conf==="E"}" data-c="E">Est</button></div></div>`;
-  if(anyLock()) return h+veil("Le classement contient le résultat du dernier match des Spurs. Il reste masqué tant que tu ne l'as pas regardé.");
+  if(anyLock()) return h+veil(lockedGames().length>1?"Le classement contient des résultats de matchs que tu n'as pas encore vus. Il reste masqué tant qu'ils ne sont pas tous regardés.":"Le classement contient le résultat du dernier match des Spurs. Il reste masqué tant que tu ne l'as pas regardé.");
   const rows=(S.conf==="W"?st.west:st.east)||[];const lead=rows[0];
   h+=`<div class="tbl"><table><thead><tr><th>Équipe</th><th>V</th><th>D</th><th>%</th><th>Écart</th></tr></thead><tbody>`+
   rows.map((r,i)=>{const gb=lead?((lead.w-r.w)+(r.l-lead.l))/2:0;const p=(r.w+r.l)?(r.w/(r.w+r.l)).toFixed(3).replace(/^0/,""):".000";
@@ -333,7 +341,7 @@ function playerTable(abbr){
 }
 function vStats(){
   let h=`<h2>Stats Spurs · saison</h2>`;
-  if(anyLock()) return h+veil("Les stats de la saison incluent le dernier match. Elles restent masquées tant que tu ne l'as pas regardé.");
+  if(anyLock()) return h+veil(lockedGames().length>1?"Les stats de la saison incluent des matchs que tu n'as pas encore vus. Elles restent masquées tant qu'ils ne sont pas tous regardés.":"Les stats de la saison incluent le dernier match. Elles restent masquées tant que tu ne l'as pas regardé.");
   return h+teamTiles("SAS")+`<div class="label">Moyennes par joueur</div>`+playerTable("SAS");
 }
 function render(){
@@ -354,11 +362,12 @@ function openGame(id,quiet){
   const g=S.games.find(x=>x.id===id); if(!g) return; S.open=id; S.openP=null; S.openApp=false;
   const d=new Date(g.start); const o=g.opp; const lock=locked(g); const anyL=anyLock();
   const sas=record("SAS"), op=record(o); const hh=h2h(o);
-  let h=`<div class="bar-top"><div class="in"><button class="btn ghost" id="close" aria-label="Fermer">← Retour</button><span class="label">${g.home?"Domicile":"Extérieur"} · ${esc(name(o))}${cupBadge(g)}</span></div></div><div class="wrap">`;
+  let h=`<div class="bar-top"><div class="in"><button class="btn ghost" id="close" aria-label="Fermer">← Retour</button><span class="label">${g.home?"Domicile":"Extérieur"} · ${esc(name(o))}</span></div></div><div class="wrap">`;
+  if(g.cup) h+=`<div class="cupban">🏆 NBA Cup${g.cupRound?" · "+esc(g.cupRound):""}</div>`;
   h+=`<div class="matchup"><div class="tm"><span class="ab" style="font-family:var(--display);font-weight:800;font-size:40px">SAS</span><span class="nm muted">Spurs</span></div><span class="vs muted">${g.home?"vs":"@"}</span><div class="tm r"><span class="ab" style="font-family:var(--display);font-weight:800;font-size:40px">${esc(o)}</span><span class="nm muted">${esc(name(o))}</span></div></div>`;
   h+=`<div class="clocks"><div class="clock card"><div class="label">Heure US (ET)</div><div class="t">${tET(d)}</div><div class="d">${dUS(d)} · ${tCT(d)} CT</div></div><div class="clock card"><div class="label">Heure France</div><div class="t">${tFR(d)}</div><div class="d">${dFR(d)}</div></div></div>`;
   if(isFinal(g)){
-    if(lock){h+=`<h2>Résultat</h2>`+veil("Score, stats du match et records sont masqués pour ton replay.")}
+    if(lock){h+=`<h2>Résultat</h2>`+veil("Score, stats du match et records sont masqués pour ton replay.",[g])}
     else{
       h+=`<h2>Résultat</h2><div class="card"><div class="score num"><span>${g.score.SAS}</span><small>${res(g)==="V"?"Victoire":"Défaite"}</small><span>${g.score.OPP}</span></div>`;
       if(g.periods) h+=`<div class="tbl" style="margin-top:12px"><table><thead><tr><th>Équipe</th>${g.periods.map(p=>`<th>${p.q>4?"Prol.":"Q"+p.q}</th>`).join("")}<th>Total</th></tr></thead><tbody><tr class="sas"><td>SAS</td>${g.periods.map(p=>`<td>${p.SAS}</td>`).join("")}<td>${g.score.SAS}</td></tr><tr><td>${esc(o)}</td>${g.periods.map(p=>`<td>${p.OPP}</td>`).join("")}<td>${g.score.OPP}</td></tr></tbody></table></div>`;
@@ -371,10 +380,10 @@ function openGame(id,quiet){
     }
   }
   h+=`<h2>Bilan de la saison face à ${esc(name(o).split(" ").pop())}</h2>`;
-  if(anyL&&hh.games.some(locked)) h+=veil("Le bilan face à cet adversaire contient un match que tu n'as pas encore vu.");
+  if(anyL&&hh.games.some(locked)) h+=veil("Le bilan face à cet adversaire contient un match que tu n'as pas encore vu.",hh.games.filter(locked));
   else h+=hh.games.length?`<div class="card"><div class="score num" style="font-size:40px"><span>${hh.w}</span><small>victoires · défaites</small><span>${hh.l}</span></div><div class="foot" style="margin-top:8px">${hh.games.map(x=>`${fmt(new Date(x.start),"Europe/Paris",{day:"numeric",month:"short"})} : ${res(x)} ${x.score.SAS}-${x.score.OPP}`).join(" · ")}</div></div>`:`<div class="empty">Premier affrontement de la saison.</div>`;
   h+=`<h2>Les deux équipes cette saison</h2>`;
-  if(anyL) h+=veil("Bilans et moyennes de la saison incluent le dernier match des Spurs.");
+  if(anyL) h+=veil(lockedGames().length>1?"Bilans et moyennes de la saison incluent des matchs des Spurs que tu n'as pas encore vus.":"Bilans et moyennes de la saison incluent le dernier match des Spurs.");
   else{const a=sas.stats,b=op.stats;
     h+=`<div class="card cmp"><div class="ln"><span class="label">SAS</span><span></span><span class="label" style="text-align:right">${esc(o)}</span></div>
     ${cmpRow("Victoires",sas.w,op.w,0)}${cmpRow("Défaites",sas.l,op.l,0)}${cmpRow("Points / match",a?.ppg,b?.ppg)}${cmpRow("Points encaissés",a?.oppg,b?.oppg)}${cmpRow("Rebonds",a?.rpg,b?.rpg)}${cmpRow("Passes déc.",a?.apg,b?.apg)}${cmpRow("Tir %",a?.fg,b?.fg)}${cmpRow("3 pts %",a?.tp,b?.tp)}</div>
@@ -500,7 +509,7 @@ function vActus(){
   if(!S.news.length) return h+`<div class="empty">Les actualités apparaîtront après la prochaine mise à jour des données.</div>`;
   if(L.length){const g=L[0];const d=new Date(g.start);
     h+=`<div class="veil"><span class="label">Anti-spoiler · ${hid.length} actu${hid.length>1?"s":""} masquée${hid.length>1?"s":""}</span><p>Publiées depuis le coup d'envoi de Spurs ${g.home?"vs":"@"} ${esc(name(g.opp).split(" ").pop())} (${fmt(d,"Europe/Paris",{weekday:"short",day:"numeric",month:"short"})}, ${tFR(d)}). Elles s'affichent quand tu as vu ${L.length>1?"les matchs":"le match"}.</p>
-    <button class="btn" data-watch="${L.map(x=>x.id).join(",")}">J'ai vu ${L.length>1?"les matchs":"le match contre "+esc(name(g.opp).split(" ").pop())}</button></div><div class="label">Avant le match</div>`}
+    ${watchBtns(L)}</div><div class="label">Avant le match</div>`}
   if(!vis.length) return h+`<div class="empty">Rien d'autre dans cette catégorie pour l'instant.</div>`;
   return h+`<div class="news">${vis.map(n=>{const d=new Date(n.time);const bar=n.kind==="blessure"?`bar ${n.severity||"q"}`:n.kind==="effectif"&&!n.url?"bar mv":"";
     const when=fmt(d,"Europe/Paris",{weekday:"short",day:"numeric",month:"short"})+(n.url?" · "+tFR(d):"");
