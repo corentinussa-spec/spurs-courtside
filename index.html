@@ -244,9 +244,15 @@ const pct=(m,a)=>a?((100*m/a).toFixed(1)):"–";
 const n1=v=>v==null?"–":(Math.round(v*10)/10).toFixed(1);
 
 /* ---------- spoiler logic ---------- */
-const SPOIL_MS=96*3600e3;
 function isFinal(g){return g.status==="final"}
-function locked(g){return isFinal(g)&&!S.watched.has(g.id)&&(Date.now()-new Date(g.start).getTime()<SPOIL_MS)}
+function locked(g){return isFinal(g)&&!S.watched.has(g.id)}
+/* Plus de révélation automatique : un match reste masqué tant que « J'ai vu » n'est pas touché.
+   Passage à la nouvelle règle (une seule fois) : les matchs déjà révélés par l'ancienne règle des 4 jours restent visibles. */
+function migrateWatched(){
+  try{if(localStorage.getItem("spurs_nolimit")||!S.games.length) return;
+    const lim=Date.now()-96*3600e3; S.games.forEach(g=>{if(isFinal(g)&&new Date(g.start).getTime()<lim) S.watched.add(g.id)});
+    localStorage.setItem("spurs_watched",JSON.stringify([...S.watched])); localStorage.setItem("spurs_nolimit","1")}catch(e){}
+}
 function lockedGames(){return S.games.filter(locked)}
 function anyLock(){return lockedGames().length>0}
 async function markWatched(ids){
@@ -576,7 +582,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#sheet").hidden
 try{JSON.parse(localStorage.getItem("spurs_watched")||"[]").forEach(i=>S.watched.add(i))}catch(e){}
 async function load(){
   try{const r=await fetch("data.json?t="+Date.now(),{cache:"no-store"});const j=await r.json();
-    S.games=j.games||[];S.meta=j.meta;S.standings=j.standings;S.injuries=j.injuries;S.teams=j.teams||{};S.players=j.players||{};S.roster=j.roster||[];S.pgames=j.playerGames||{};S.cbest=j.careerBest||{};S.news=j.news||[];drawLogo();
+    S.games=j.games||[];S.meta=j.meta;S.standings=j.standings;S.injuries=j.injuries;S.teams=j.teams||{};S.players=j.players||{};S.roster=j.roster||[];S.pgames=j.playerGames||{};S.cbest=j.careerBest||{};S.news=j.news||[];migrateWatched();drawLogo();
     render();if(S.open)openGame(S.open,"noconf");else if(S.openP)openPlayer(S.openP,true)}
   catch(e){if(!S.games.length)$("#boot").textContent="Pas de connexion : les données s'afficheront dès que le téléphone sera en ligne."}
 }
